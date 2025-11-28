@@ -1,0 +1,20 @@
+---
+title: "transcriptomic_data_mmu"
+author: "Paula Amador"
+date: "2025-11-28"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Obtenemos los datos transcriptómicos del estudio "Transcriptome-(phospho)proteome characterization of brain of a germline model of cytoplasmic-predominant Pten expression with autism-like phenotypes"
+
+El articulo presenta una caracterización integral del fosfoproteoma neural del cerebro de ratones con la mutación Ptenm3m4/m3m4. Este modelo de ratón tiene una expresión de la proteína PTEN predominantemente citoplasmática y exhibe fenotipos similares al trastorno del espectro autista (TEA). 
+
+PTEN es un gen supresor de tumores el cual además se relaciona con la predisposión a padecer cáncer. 
+
+Se comparan 2 genotipos de ratones, los homocigotos mutantes Pten m3m4/m3m4 con ratones wild type. Además las muestras de cerebro se escogen en 2 líneas temporales, Se recogen muestras del hemisferio cerebral completo a las 2 semanas de vida (P14) y luego se recogen muestras de córtex a las 6 semanas (P40). 
+
+
