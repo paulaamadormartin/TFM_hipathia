@@ -190,6 +190,5 @@ write.csv(effector_gene_pathway_csv, file = "/Users/paula/Documents/Bioinformati
 
 #Decidir los genes efectores de las vías que se van a estudiar. 
 ```{r}
-
 ```
 
