@@ -1,0 +1,195 @@
+---
+title: "KEGG_circuits_mmu"
+author: "Paula Amador"
+date: "2025-11-27"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  tidy = FALSE,
+  message = FALSE,
+  warning = FALSE
+)
+
+#se instala biocmanager si es necesario
+if (!requireNamespace("BiocManager", quietly = TRUE)) {
+  install.packages("BiocManager")
+}
+
+#se instalan los paquetes de bioconductor si son necesarios
+bioc_pkgs <- c(
+  "hipathia", "org.Mm.eg.db", "limma", "DESeq2", "biomaRt"
+)
+
+for (pkg in bioc_pkgs) {
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+    BiocManager::install(pkg)
+  }
+}
+
+#instalamos paquetes cran si son necesarios
+cran_pkgs <- c(
+  "readr", "tidyr", "AnnotationDbi", "tibble",
+  "edgeR", "MultiAssayExperiment", "SummarizedExperiment", "igraph"
+)
+
+for (pkg in cran_pkgs) {
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+    install.packages(pkg)
+  }
+}
+
+```
+
+# Conseguir los nodos efectores que están en Hipathia
+
+Hipathia es un método que calcula la transducción de señal en dos pasos. Primero, cuantifica la presencia de un gen específico como un valor normalizado entre 0 y 1. Luego, calcula el valor de la señal que pasa por un nodo teniendo en cuenta el nivel de expresión de cada gen dentro del nodo y la intensidad de la señal que le llega. El valor de señal de la vía corresponde al valor de señal que atraviesa el último nodo de dicha vía.
+
+La señal llega a un nodo inicial y se transmite a lo largo de la vía siguiendo la dirección de las interacciones hasta llegar a un nodo de salida. De este modo, la señal puede seguir múltiples trayectorias dentro de la misma vía. Hipathia calcula la intensidad de esta señal por separado para cada nodo de salida de una vía.
+
+Los genes en los nodos de salida también se conocen como genes efectores, ya que son los responsables de llevar a cabo la acción que la señal pretende provocar. Definimos una subvía efectora que termina en el nodo G como el subgrafo que incluye todos los nodos que forman parte de alguna trayectoria que conduce a G. Cuando se aplica a subvías efectoras, hipathia devuelve la intensidad de la señal que llega a la proteína efectora G.
+
+Las subvías efectoras pueden tener múltiples nodos de entrada. Para analizar en detalle cuál de las posibles trayectorias que conducen al nodo G es responsable del cambio observado, las subvías efectoras pueden descomponerse en varias subvías que incluyan solo un nodo de entrada. Definimos la subvía descompuesta desde H hasta G como el subgrafo que incluye todos los nodos que forman parte de alguna trayectoria desde H hasta G.
+
+```{r, message=FALSE, warning=FALSE}
+#se cargan todos los paquetes
+library(hipathia)
+library(readr)
+library(tidyr)
+library(AnnotationDbi)
+library(org.Mm.eg.db)
+library(tibble)
+library(limma)
+library(edgeR)
+library(MultiAssayExperiment)
+library(SummarizedExperiment)
+library(DESeq2)
+library(biomaRt)
+library(igraph)
+```
+
+Se hace una exploración de las rutas que hay disponibles en KEGG para ratón. 
+```{r}
+pathways=hipathia::load_pathways(species = "mmu")
+all_path_info = lapply(pathways$pathigraphs, function(x){
+  list(
+    path_name = x$path.name,
+    circuits  = names(x$subgraphs)
+  )
+})
+#podemos ver todas las rutas biológicas que se encuentran
+sapply(all_path_info, `[[`, "path_name")
+#podemos ver los circuitos (o subvías) que conforman dichas rutas, por ejemplo:
+all_path_info[[1]]
+```
+
+Se crea una función que nos devuelva el nodo efector (grado de salida=0) de cada circuito. Cada nodo efector se corresponde a un gen que está asociado con un Entrez ID. 
+
+Las vías se representan mediante grafos y los circuitos mediante subgrafos. Primero para sacar el gen efector de un subgrafo:
+
+```{r}
+subG=pathways$pathigraphs$mmu03320$effector.subgraphs$`P-mmu03320-37` #trayectoria desde un nodo de entrada a uno efector
+V(subG)[degree(subG, mode = "out")==0]$genesList
+#se accede a todos los nodos y se selecciona los nodos que cumple la condición de que sean terminales (no tenga nodos posteriores)
+#genesList devuelve los genes asociados al nodo efector de esta subvía
+```
+
+Se convierte a un dataframe para visualizar todos los nodos (vértices)
+```{r}
+igraph::as_data_frame(subG, what = "vertices") %>% View
+```
+
+Aquí podemos ver todos los nodos que componen el subgrafo y el nodo efector que sería el que corresponde con el Entrez ID 15360
+
+## Función para extraer los nodos efectores de cada subgrafo
+```{r}
+get_entrez_effector=function(subG){
+   V(subG)[degree(subG, mode = "out")==0]$genesList %>% unlist()  
+}
+```
+
+Función para extraer todos los circuitos y sus efectores correspondientes
+```{r}
+get_effector_gene_pathway = function(pathways) {
+  result = list()
+  
+  for (pw_id in names(pathways$pathigraphs)) {
+    pw = pathways$pathigraphs[[pw_id]]
+    pw_name = pw$path.name
+    
+    for (subgraph_name in names(pw$effector.subgraphs)) {
+      subG = pw$effector.subgraphs[[subgraph_name]]
+      genes = get_entrez_effector(subG)
+      
+      if (length(genes) > 0) {
+        df = data.frame(
+          gene = genes,
+          pathway_id = pw_id,
+          pathway_name = pw_name,
+          effector_circuit = subgraph_name,
+          stringsAsFactors = FALSE
+        )
+        result[[paste(pw_id, subgraph_name, sep = "_")]] <- df
+      }
+    }
+  }
+  
+  final_df = do.call(rbind, result)
+  return(final_df)
+}
+
+# # Ejecutar
+effector_gene_pathway=get_effector_gene_pathway(pathways)
+```
+
+Visualizamos las primeras filas del dataframe
+```{r}
+head(effector_gene_pathway)
+```
+
+Ahora necesitamos asociar cada ENTREZ ID al nombre del gen correspondiente
+```{r}
+entrez_ids= unique(effector_gene_pathway$gene) #indicamos que la columna gene corresponde con los ENTREZ IDs
+gene_symbols= mapIds(org.Mm.eg.db,
+                     keys = entrez_ids,
+                     column = "SYMBOL",
+                     keytype = "ENTREZID",
+                     multiVals = "first")
+effector_gene_pathway$symbol= gene_symbols[as.character(effector_gene_pathway$gene)] #añadimos una columna adicional con el simbolo de cada gen
+```
+
+Convertimos este dataframe para poder exportalo como archivo csv.
+
+```{r}
+effector_gene_pathway_csv = data.frame(
+  lapply(effector_gene_pathway, function(col) {
+    if (is.list(col)) {
+      sapply(col, function(x) paste(x, collapse = ";"))
+    } else {
+      col
+    }
+  }),
+  stringsAsFactors = FALSE
+)
+```
+
+Primeras filas del documento:
+```{r}
+head(effector_gene_pathway_csv)
+```
+
+Lo guardamos como csv.
+
+```{r}
+write.csv(effector_gene_pathway_csv, file = "/Users/paula/Documents/Bioinformatica/tfm/25_26/KEGG_circuits_annotated_mmu.csv", row.names = FALSE)
+```
+
+#Decidir los genes efectores de las vías que se van a estudiar. 
+```{r}
+
+```
+
