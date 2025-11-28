@@ -17,4 +17,19 @@ PTEN es un gen supresor de tumores el cual además se relaciona con la predispos
 
 Se comparan 2 genotipos de ratones, los homocigotos mutantes Pten m3m4/m3m4 con ratones wild type. Además las muestras de cerebro se escogen en 2 líneas temporales, Se recogen muestras del hemisferio cerebral completo a las 2 semanas de vida (P14) y luego se recogen muestras de córtex a las 6 semanas (P40). 
 
+Se realizan 3 réplicas por cada genotipo y por cada línea temporal, por lo que tenemos un total de 12 muestras.
+
+Procedemos a la importación de los datos 
+
+```{r}
+datos_mmu=read.csv("/Users/paula/Documents/Bioinformatica/tfm/25_26/datos_tfm/GSE59318_FPKM_values_by_replicate_UPDATED.csv")
+head(datos_mmu)
+```
+
+Eliminamos las columnas que no hacen falta
+```{r}
+datos_mmu= datos_mmu[, -c(1,3,4,10,11)]
+head(datos_mmu)
+```
+
 
